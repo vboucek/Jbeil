@@ -16,13 +16,13 @@ def preprocess(data_name):
     s = next(f)
     for idx, line in enumerate(f):
       e = line.strip().split(',')
-      u = int(e[0])
-      i = int(e[1])
+      u = int(e[1])
+      i = int(e[2])
 
-      ts = float(e[2])
-      label = float(e[3])
+      ts = float(e[0])
+      label = float(e[9])
 
-      feat = np.array([float(x) for x in e[4:]])
+      feat = np.array([float(e[5]), float(e[6]), float(e[7]), float(e[8])])
 
       u_list.append(u)
       i_list.append(i)
@@ -63,7 +63,7 @@ def reindex(df, bipartite=True):
 
 def run(data_name, bipartite=True):
   Path("data/").mkdir(parents=True, exist_ok=True)
-  PATH = './data/{}.csv'.format(data_name)
+  PATH = '/mnt/beegfs/home/bilot/these_bilot/Jbeil/Jbeil/data/{}.csv'.format(data_name)
   OUT_DF = './data/ml_{}.csv'.format(data_name)
   OUT_FEAT = './data/ml_{}.npy'.format(data_name)
   OUT_NODE_FEAT = './data/ml_{}_node.npy'.format(data_name)

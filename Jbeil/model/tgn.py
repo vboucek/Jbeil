@@ -13,7 +13,7 @@ from model.time_encoding import TimeEncode
 
 
 class TGN(torch.nn.Module):
-  def __init__(self, neighbor_finder, node_features, edge_features, device, n_layers=2,
+  def __init__(self, neighbor_finder, node_features, node_embedding_size, edge_features, device, n_layers=2,
                n_heads=2, dropout=0.1, use_memory=False,
                memory_update_at_start=True, message_dimension=100,
                memory_dimension=500, embedding_module_type="graph_attention",
@@ -34,7 +34,7 @@ class TGN(torch.nn.Module):
     self.node_raw_features = torch.from_numpy(node_features.astype(np.float32)).to(device)
     self.edge_raw_features = torch.from_numpy(edge_features.astype(np.float32)).to(device)
 
-    self.n_node_features = self.node_raw_features.shape[1]
+    self.n_node_features = node_embedding_size
     self.n_nodes = self.node_raw_features.shape[0]
     self.n_edge_features = self.edge_raw_features.shape[1]
     self.embedding_dimension = self.n_node_features
@@ -91,7 +91,8 @@ class TGN(torch.nn.Module):
                                                  device=self.device,
                                                  n_heads=n_heads, dropout=dropout,
                                                  use_memory=use_memory,
-                                                 n_neighbors=self.n_neighbors)
+                                                 n_neighbors=self.n_neighbors,
+                                                 node_embedding_size=node_embedding_size)
 
     # MLP to compute probability on an edge given two node embeddings
     self.affinity_score = MergeLayer(self.n_node_features, self.n_node_features,

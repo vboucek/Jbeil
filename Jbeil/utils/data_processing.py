@@ -53,15 +53,17 @@ def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=F
   logger.info("inductiveness {}".format(induct))
   ### Load data and train val test split
   # graph_df = pd.read_csv('./data/{}.csv'.format(dataset_name))
-  graph_df = pd.read_csv('./data/ml_{}.csv'.format(dataset_name))
+  graph_df = pd.read_csv('/mnt/beegfs/home/bilot/these_bilot/Jbeil/Jbeil/data/ml_{}.csv'.format(dataset_name))
   graph_df = graph_df.head(n)
-  edge_features = np.load('./data/ml_{}.npy'.format(dataset_name))
-  node_features = np.load('./data/ml_{}_node.npy'.format(dataset_name)) 
+  edge_features = np.load('/mnt/beegfs/home/bilot/these_bilot/Jbeil/Jbeil/data/ml_{}.npy'.format(dataset_name))
+  node_features = np.load('/mnt/beegfs/home/bilot/these_bilot/Jbeil/Jbeil/data/ml_{}_node.npy'.format(dataset_name)) 
+
+  node_features = np.eye(node_features.shape[0])
     
   if randomize_features:
     node_features = np.random.rand(node_features.shape[0], node_features.shape[1])
 
-  val_time, test_time = list(np.quantile(graph_df.ts, [0.70, 0.85]))
+  val_time, test_time, end_14_days = 140400, 147540, 1209540
 
   sources = graph_df.u.values
   destinations = graph_df.i.values
@@ -94,6 +96,7 @@ def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=F
   # Mask saying for each source and destination whether they are new test nodes
   new_test_source_mask = graph_df.u.map(lambda x: x in new_test_node_set).values
   new_test_destination_mask = graph_df.i.map(lambda x: x in new_test_node_set).values
+  print("df done")
 
   # Mask which is true for edges with both destination and source not being new test nodes (because
   # we want to remove all edges involving any new test node)
@@ -112,7 +115,7 @@ def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=F
   new_node_set = node_set - train_node_set
 
   val_mask = np.logical_and(timestamps <= test_time, timestamps > val_time)
-  test_mask = timestamps > test_time
+  test_mask = np.logical_and(timestamps > test_time, timestamps < end_14_days)
 
   if different_new_nodes_between_val_and_test:
     n_new_nodes = len(new_test_node_set) // 2

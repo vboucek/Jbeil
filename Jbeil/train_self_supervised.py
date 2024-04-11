@@ -9,7 +9,7 @@ import pickle
 from tqdm import tqdm
 from pathlib import Path
 
-from evaluation.evaluation import eval_edge_prediction
+from evaluation.evaluation import eval_edge_prediction, eval_edge_detection
 from model.tgn import TGN
 from utils.utils import EarlyStopMonitor, RandEdgeSampler, get_neighbor_finder
 from utils.data_processing import get_data, compute_time_statistics
@@ -95,9 +95,9 @@ n = args.n
 
 Path("./saved_models/").mkdir(parents=True, exist_ok=True)
 Path("./saved_checkpoints/").mkdir(parents=True, exist_ok=True)
-MODEL_SAVE_PATH = f'./saved_models/{args.prefix}-{args.data}.pth'
+MODEL_SAVE_PATH = f'./saved_models/{args.prefix}-{args.node_dim}-{args.data}.pth'
 get_checkpoint_path = lambda \
-    epoch: f'./saved_checkpoints/{args.prefix}-{args.data}-{epoch}.pth'
+    epoch: f'./saved_checkpoints/{args.prefix}-{args.data}-{args.node_dim}-{epoch}.pth'
 
 ### set up logger
 Path("log/").mkdir(parents=True, exist_ok=True)
@@ -148,6 +148,7 @@ for i in range(args.n_runs):
 
   # Initialize Model
   tgn = TGN(neighbor_finder=train_ngh_finder, node_features=node_features,
+            node_embedding_size=NODE_DIM,
             edge_features=edge_features, device=device,
             n_layers=NUM_LAYER,
             n_heads=NUM_HEADS, dropout=DROP_OUT, use_memory=USE_MEMORY,
@@ -243,6 +244,7 @@ for i in range(args.n_runs):
 
     epoch_time = time.time() - start_epoch
     epoch_times.append(epoch_time)
+    print(f"Mean loss: {np.mean(m_loss):.4f}")
 
     ### Validation
     # Validation uses the full graph
@@ -254,7 +256,7 @@ for i in range(args.n_runs):
       train_memory_backup = tgn.memory.backup_memory()
 
 
-    val_ap, val_auc, val_recall, val_precision, val_fp, val_fn, val_tp, val_tn = eval_edge_prediction(model=tgn,
+    val_ap, val_auc, val_recall, val_precision, val_fp, val_fn, val_tp, val_tn, thresholdOpt = eval_edge_prediction(model=tgn,
                                                             negative_edge_sampler=val_rand_sampler,
                                                             data=val_data,
                                                             n_neighbors=NUM_NEIGHBORS)
@@ -272,11 +274,11 @@ for i in range(args.n_runs):
       tgn.memory.restore_memory(train_memory_backup)
 
     # Validate on unseen nodes
-    nn_val_ap, nn_val_auc, nn_val_recall, nn_val_precision, nn_val_fp, nn_val_fn, nn_val_tp, nn_val_tn = eval_edge_prediction(model=tgn,
+    nn_val_ap, nn_val_auc, nn_val_recall, nn_val_precision, nn_val_fp, nn_val_fn, nn_val_tp, nn_val_tn, thresholdOpt = eval_edge_prediction(model=tgn,
                                                                         negative_edge_sampler=val_rand_sampler,
                                                                         data=new_node_val_data,
                                                                         n_neighbors=NUM_NEIGHBORS)
-
+    
     if USE_MEMORY:
       # Restore memory we had at the end of validation
       tgn.memory.restore_memory(val_memory_backup)
@@ -329,6 +331,9 @@ for i in range(args.n_runs):
     else:
       torch.save(tgn.state_dict(), get_checkpoint_path(epoch))
 
+    # if epoch == 1:
+    #   break
+
   # Training has finished, we have loaded the best model, and we want to backup its current
   # memory (which has seen validation edges) so that it can also be used when testing on unseen
   # nodes
@@ -339,39 +344,41 @@ for i in range(args.n_runs):
   ### Test
   logger.info('Started Testing')
   tgn.embedding_module.neighbor_finder = full_ngh_finder
-  test_ap, test_auc, test_recall, test_precision, test_fp, test_fn, test_tp, test_tn = eval_edge_prediction(model=tgn,
-                                                              negative_edge_sampler=test_rand_sampler,
-                                                              data=test_data,
-                                                              n_neighbors=NUM_NEIGHBORS)
+  # test_ap, test_auc, test_recall, test_precision, test_fp, test_fn, test_tp, test_tn = eval_edge_prediction(model=tgn,
+  #                                                             negative_edge_sampler=test_rand_sampler,
+  #                                                             data=test_data,
+  #                                                             n_neighbors=NUM_NEIGHBORS)
 
   if USE_MEMORY:
     tgn.memory.restore_memory(val_memory_backup)
 
   # Test on unseen nodes
-  nn_test_ap, nn_test_auc, nn_test_recall, nn_test_precision, nn_test_fp, nn_test_fn, nn_test_tp, nn_test_tn = eval_edge_prediction(model=tgn,
-                                                                          negative_edge_sampler=nn_test_rand_sampler,
-                                                                          data=new_node_test_data,
-                                                                          n_neighbors=NUM_NEIGHBORS)
+  eval_edge_detection(model=tgn,
+                      negative_edge_sampler=nn_test_rand_sampler,
+                      data=new_node_test_data,
+                      thresholdOpt=thresholdOpt,
+                      n_neighbors=NUM_NEIGHBORS,
+                    )
 
-  logger.info(
-    'Test statistics: Old nodes -- auc: {}, ap: {}, recall: {}, precision: {}, fp: {}, fn: {}, tp: {}, tn: {}'.format(test_auc, test_ap, test_recall, test_precision, test_fp, test_fn, test_tp, test_tn))
-  logger.info(
-    'Test statistics: New nodes -- auc: {}, ap: {}, recall: {}, precision: {}, fp: {}, fn: {}, tp: {}, tn: {}'.format(nn_test_auc, nn_test_ap, nn_test_recall, nn_test_precision, nn_test_fp, nn_test_fn, nn_test_tp, nn_test_tn))
+  # logger.info(
+  #   'Test statistics: Old nodes -- auc: {}, ap: {}, recall: {}, precision: {}, fp: {}, fn: {}, tp: {}, tn: {}'.format(test_auc, test_ap, test_recall, test_precision, test_fp, test_fn, test_tp, test_tn))
+  # logger.info(
+  #   'Test statistics: New nodes -- auc: {}, ap: {}, recall: {}, precision: {}, fp: {}, fn: {}, tp: {}, tn: {}'.format(nn_test_auc, nn_test_ap, nn_test_recall, nn_test_precision, nn_test_fp, nn_test_fn, nn_test_tp, nn_test_tn))
 
 
 
 
 
-  # Save results for this run
-  pickle.dump({
-    "val_aps": val_aps,
-    "new_nodes_val_aps": new_nodes_val_aps,
-    "test_ap": test_ap,
-    "new_node_test_ap": nn_test_ap,
-    "epoch_times": epoch_times,
-    "train_losses": train_losses,
-    "total_epoch_times": total_epoch_times
-  }, open(results_path, "wb"))
+  # # Save results for this run
+  # pickle.dump({
+  #   "val_aps": val_aps,
+  #   "new_nodes_val_aps": new_nodes_val_aps,
+  #   "test_ap": test_ap,
+  #   "new_node_test_ap": nn_test_ap,
+  #   "epoch_times": epoch_times,
+  #   "train_losses": train_losses,
+  #   "total_epoch_times": total_epoch_times
+  # }, open(results_path, "wb"))
 
   logger.info('Saving Jbeil model')
   if USE_MEMORY:
