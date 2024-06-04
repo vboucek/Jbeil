@@ -112,7 +112,8 @@ logging.info("Running Urban Planning")
 logger = logging.getLogger('urbanGUI')
 logger.info(args)
 
-### Extract data for training, validation and testing
+# We set inductiveness to 0 as we already use Exp after
+induct = 0
 node_features, edge_features, full_data, train_data, val_data, test_data, new_node_val_data, \
 new_node_test_data = get_data(DATA, induct, n,
                               different_new_nodes_between_val_and_test=args.different_new_nodes, randomize_features=args.randomize_features, logger = logger)
@@ -315,7 +316,7 @@ for i in range(args.n_runs):
         tgn.memory.detach_memory()
 
     epoch_time = time.time() - start_epoch
-    print(epoch_time)
+    print(f"Train time: {epoch_time}")
     epoch_times.append(epoch_time)
     print(f"Mean loss: {np.mean(m_loss):.4f}")
 
@@ -347,6 +348,7 @@ for i in range(args.n_runs):
       tgn.memory.restore_memory(train_memory_backup)
 
     # Validate on unseen nodes
+    
     nn_val_ap, nn_val_auc, nn_val_recall, nn_val_precision, nn_val_fp, nn_val_fn, nn_val_tp, nn_val_tn, thresholdOpt = eval_edge_prediction(model=tgn,
                                                                         negative_edge_sampler=val_rand_sampler,
                                                                         data=new_node_val_data,
@@ -426,12 +428,14 @@ for i in range(args.n_runs):
     tgn.memory.restore_memory(val_memory_backup)
 
   # Test on unseen nodes
+  s = time.time()
   eval_edge_detection(model=tgn,
                       negative_edge_sampler=nn_test_rand_sampler,
                       data=new_node_test_data,
                       thresholdOpt=thresholdOpt,
                       n_neighbors=NUM_NEIGHBORS,
                     )
+  print(f"Test time: {time.time() - s}")
 
   # logger.info(
   #   'Test statistics: Old nodes -- auc: {}, ap: {}, recall: {}, precision: {}, fp: {}, fn: {}, tp: {}, tn: {}'.format(test_auc, test_ap, test_recall, test_precision, test_fp, test_fn, test_tp, test_tn))

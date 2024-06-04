@@ -77,7 +77,7 @@ def run(data_name, bipartite=True):
   feat = np.vstack([empty, feats])
   max_idx = max(new_df.u.max(), new_df.i.max())
 
-  rand_feat = np.eye(max_idx + 1, 10)  
+  rand_feat = np.eye(max_idx + 1)  
 
 
   new_df.to_csv(OUT_DF)
