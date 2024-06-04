@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 import torch
-from sklearn.metrics import average_precision_score, roc_auc_score, confusion_matrix, recall_score, precision_score, roc_curve, auc as auc_value
+from sklearn.metrics import average_precision_score as ap_score, roc_auc_score, confusion_matrix, recall_score, precision_score, roc_curve, auc as auc_value, precision_recall_fscore_support
 
 
 def eval_edge_prediction(model, negative_edge_sampler, data, n_neighbors, batch_size=200):
@@ -83,7 +83,7 @@ def eval_edge_prediction(model, negative_edge_sampler, data, n_neighbors, batch_
         else:
           pred_score[i] = 1
       
-      val_ap.append(average_precision_score(true_label, pred_score))
+      val_ap.append(ap_score(true_label, pred_score))
       val_auc.append(roc_auc_score(true_label, pred_score))  
       
       #print(recall_score(true_label, pred_score))
@@ -108,6 +108,50 @@ def eval_edge_prediction(model, negative_edge_sampler, data, n_neighbors, batch_
   # return np.mean(val_ap), np.mean(val_auc), np.mean(val_recall), np.mean(val_precision)
   return np.mean(val_ap), np.mean(val_auc), np.mean(val_recall), np.mean(val_precision), np.mean(val_fp), np.mean(val_fn), np.mean(val_tp), np.mean(val_tn), thresholdOpt
 
+def compute_metrics(ys, y_hats, scoress):
+  attack_idxs = (ys == 1).nonzero()[0]
+
+  overall_acc = (ys == y_hats).mean()
+  precision, recall, f1, support = precision_recall_fscore_support(
+      ys, y_hats, average="binary"
+  )
+
+  tp = y_hats[ys == 1].sum()
+  fp = y_hats[ys == 0].sum()
+  tpr = y_hats[ys == 1].mean()
+  fpr = y_hats[ys == 0].mean()
+
+  len_positives = len((ys == 1).nonzero()[0])
+  len_negatives = len((ys == 0).nonzero()[0])
+
+  if scoress is not None:
+      try:
+          auc = roc_auc_score(ys, scoress)
+          auc_fpr, auc_tpr, _ = roc_curve(ys, scoress)
+      except:
+          auc = float("nan")
+          auc_fpr = float("nan")
+          auc_tpr = float("nan")
+
+      try:
+          ap = ap_score(ys, scoress)
+      except:
+          ap = float("nan")
+  else:
+      auc = float("nan")
+      auc_fpr = float("nan")
+      auc_tpr = float("nan")
+      ap = float("nan")
+
+  print(
+      f"Evaluation: found {tp} attacks / {len(attack_idxs)} attack samples ({(tp/len(attack_idxs))*100:.5f}%)."
+  )
+  print(
+      f"TPR: {tpr:.3f} | FPR: {fpr:.6f} | Overall acc: {overall_acc:.6f} | AP: {ap:.3f} | F1: {f1:.3f} | AUC: {auc:.3f} | recall: {recall:.3f} | precision: {precision:.3f}"
+  )
+  print(f"TP: {tp}/{len_positives} | FP: {fp}/{len_negatives}")
+
+  return auc, precision, recall, tpr, fpr, f1, ap
 
 def eval_edge_detection(model, negative_edge_sampler, data, n_neighbors, thresholdOpt, batch_size=200):
   # Ensures the random sampler uses a seed for evaluation (i.e. we sample always the same
@@ -169,26 +213,16 @@ def eval_edge_detection(model, negative_edge_sampler, data, n_neighbors, thresho
     
     thresholdOpt = find_best_threshold_auc(all_logits, all_labels)
     all_preds = np.where(all_logits > thresholdOpt, 1, 0)
-
-    ap = average_precision_score(all_labels, all_preds)
-    auc = roc_auc_score(all_labels, all_preds)  
-    
-    recall = recall_score(all_labels, all_preds)
-    precision = precision_score(all_labels, all_preds)
     
     tn, fp, fn, tp = confusion_matrix(all_labels, all_preds).ravel()
 
     print(f"Average predicted score: {all_logits.mean():.3f}")
     print(f"Threshold: {thresholdOpt:.3f}")
     print("")
-    
-    print(f"Precision: {precision:.3f}")
-    print(f"AP: {ap:.3f}")
-    print(f"AUC: {auc:.3f}")
-    print(f"Recall: {recall:.3f}")
-    print("")
 
     print(f"TP: {tp:.3f}/{all_labels.sum()} | FP: {fp:.3f} | FN: {fn:.3f} | TN: {tn:.3f}")
+    
+    compute_metrics(all_labels, all_preds, all_logits)
 
 
 def eval_node_classification(tgn, decoder, data, edge_idxs, batch_size, n_neighbors):

@@ -57,8 +57,6 @@ def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=F
   graph_df = graph_df.head(n)
   edge_features = np.load('/mnt/beegfs/home/bilot/these_bilot/Jbeil/Jbeil/data/ml_{}.npy'.format(dataset_name))
   node_features = np.load('/mnt/beegfs/home/bilot/these_bilot/Jbeil/Jbeil/data/ml_{}_node.npy'.format(dataset_name)) 
-
-  node_features = np.eye(node_features.shape[0])
     
   if randomize_features:
     node_features = np.random.rand(node_features.shape[0], node_features.shape[1])

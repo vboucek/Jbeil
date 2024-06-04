@@ -6,6 +6,7 @@ import argparse
 import torch
 import numpy as np
 import pickle
+import random
 from tqdm import tqdm
 from pathlib import Path
 
@@ -16,9 +17,11 @@ from utils.data_processing import get_data, compute_time_statistics
 
 torch.manual_seed(0)
 np.random.seed(0)
+random.seed(0)
 
 ### Argument and global variables
 parser = argparse.ArgumentParser('Jbeil self-supervised training')
+parser.add_argument('--exp', type=str, help='Inductive experiment as in TAO (Exp1, Exp2, Exp3)')
 parser.add_argument('--induct', type=float, default=0.3)
 parser.add_argument('--n', type=int, default=1000000)
 parser.add_argument('-d', '--data', type=str, help='Dataset name (eg. auth or pivoting)',
@@ -113,6 +116,75 @@ logger.info(args)
 node_features, edge_features, full_data, train_data, val_data, test_data, new_node_val_data, \
 new_node_test_data = get_data(DATA, induct, n,
                               different_new_nodes_between_val_and_test=args.different_new_nodes, randomize_features=args.randomize_features, logger = logger)
+
+# Inductive experiments from TAO happen here
+def compute_inductive_nodes(inductive_experiment, nb_nodes):
+  if inductive_experiment == "None":
+      return None
+
+  # Removes 30% of nodes with their connections, without any malicious nodes inside.
+  if inductive_experiment == "Exp1":
+      percent = int(nb_nodes * 0.3)
+
+      available_nodes = set(range(1, nb_nodes)) - set(
+          malicious_src_nodes
+      )
+      sample = torch.tensor(random.sample(available_nodes, percent))
+
+      return sample
+
+  # Removes 30% of nodes with their connections, including all malicious nodes (4)
+  if inductive_experiment == "Exp2":
+      percent = int(nb_nodes * 0.3)
+
+      available_nodes = set(range(1, nb_nodes))
+      sample = torch.tensor(random.sample(available_nodes, percent))
+      sample[: len(malicious_src_nodes)] = torch.tensor(
+          malicious_src_nodes
+      )
+
+      return sample
+
+  # Removes 50% of nodes with their connections, including all malicious nodes (4)
+  if inductive_experiment == "Exp3":
+      percent = int(nb_nodes * 0.5)
+
+      available_nodes = set(range(1, nb_nodes))
+      sample = torch.tensor(random.sample(available_nodes, percent))
+      sample[: len(malicious_src_nodes)] = torch.tensor(
+          malicious_src_nodes
+      )
+
+      return sample
+
+  raise ValueError("Invalid experiment name.")
+
+def apply_inductive_experiment(data, inductive_nodes):
+    sample = inductive_nodes
+
+    mask = (torch.tensor(data.sources).unsqueeze(1) == sample).any(1) | (
+        torch.tensor(data.destinations).unsqueeze(1) == sample
+    ).any(1)
+    keep_edges = ~mask
+
+    data.sources = data.sources[keep_edges]
+    data.destinations = data.destinations[keep_edges]
+    data.labels = data.labels[keep_edges]
+    data.timestamps = data.timestamps[keep_edges]
+    data.edge_idxs = data.edge_idxs[keep_edges]
+
+    return data
+
+OPTC_MALICIOUS_SRC_NODES = [201, 402, 501]
+LANL_MALICIOUS_SRC_NODES = [9660, 9910, 10957, 12637]
+
+malicious_src_nodes = OPTC_MALICIOUS_SRC_NODES if args.data == "OPTC" else LANL_MALICIOUS_SRC_NODES
+nb_nodes = 975 if args.data == "OPTC" else 15611 
+
+# We update train data to remove inductive nodes from training
+inductive_nodes = compute_inductive_nodes(args.exp, nb_nodes)
+train_data = apply_inductive_experiment(train_data, inductive_nodes)
+
 
 # Initialize training neighbor finder to retrieve temporal graph
 train_ngh_finder = get_neighbor_finder(train_data, args.uniform)
@@ -243,6 +315,7 @@ for i in range(args.n_runs):
         tgn.memory.detach_memory()
 
     epoch_time = time.time() - start_epoch
+    print(epoch_time)
     epoch_times.append(epoch_time)
     print(f"Mean loss: {np.mean(m_loss):.4f}")
 
