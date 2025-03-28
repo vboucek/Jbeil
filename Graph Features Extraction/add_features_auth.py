@@ -281,6 +281,7 @@ if __name__ == "__main__":
     src_path = None
     assert src_path, "Provide source path where LANL files are located"
     dst_path = "../dataset/lanl"
+    os.makedirs(dst_path, exist_ok=True)
     auth_file = os.path.join(src_path, "auth.txt")
     red_file = os.path.join(src_path, "redteam.txt")
 

@@ -176,6 +176,7 @@ if __name__ == "__main__":
     pivoting_file = None
     assert pivoting_file, "Provide source path where Pivoting file is located"
     dst_path = "../dataset/pivoting"
+    os.makedirs(dst_path, exist_ok=True)
 
     # Process the entire dataset into one file.
     split(pivoting_file, dst_path)
