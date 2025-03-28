@@ -278,7 +278,8 @@ def reverse_load_map(auth_path, fname):
 
 
 if __name__ == "__main__":
-    src_path = "/Volumes/KINGSTON/"
+    src_path = None
+    assert src_path, "Provide source path where LANL files are located"
     dst_path = "../dataset/lanl"
     auth_file = os.path.join(src_path, "auth.txt")
     red_file = os.path.join(src_path, "redteam.txt")

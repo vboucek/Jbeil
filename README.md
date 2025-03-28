@@ -1,3 +1,25 @@
+## README update:
+This is the updated Jbeil repository used for testing. To use datasets with extracted features, use preprocessing scripts in the Graph Features Extraction folder.
+To preprocess the data for usage with the Jbeil TGN, use /utils/preprocess_{dataset}.py scripts:
+
+For LANL dataset:
+
+    python utils/preprocess_lanl.py
+
+For OpTC dataset:
+
+    python utils/preprocess_optc.py
+
+For OpTC dataset:
+
+    python utils/preprocess_optc.py
+
+Might need to update the paths within the script, if you stored the data in different folder during preprocessing.
+
+To run the training, use:
+
+    python train_self_supervised.py --data lanl|auth|pivoting
+
 
 # Jbeil: Temporal Graph-Based Inductive Learning to Infer Lateral Movement in Evolving Enterprise Networks 
 

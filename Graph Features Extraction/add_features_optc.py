@@ -139,7 +139,8 @@ def reverse_load_map(auth_path, fname):
 
 
 if __name__ == "__main__":
-    optc_file = "/Volumes/KINGSTON/optc/optc_sorted_labeled.csv"
+    optc_file = None
+    assert optc_file, "Provide source path where OpTC file is located"
     dst_path = "../dataset/optc"
     os.makedirs(dst_path, exist_ok=True)
     split(optc_file, dst_path)

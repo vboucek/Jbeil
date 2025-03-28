@@ -10,11 +10,13 @@ with open('InHostSrcMapPivoting.pkl', 'rb') as f:
 with open('OutHostDstMapPivoting.pkl', 'rb') as f:
     OutHostDstMap = pickle.load(f)
 
+
 # -----------------------------
 # Helper functions for feature calculations
 # -----------------------------
 def average(lst):
     return sum(lst) / len(lst) if lst else 0
+
 
 def stddev(lst):
     if not lst:
@@ -23,6 +25,7 @@ def stddev(lst):
     variance = sum((x - mean) ** 2 for x in lst) / len(lst)
     return variance ** 0.5
 
+
 # Inbound feature: for a given destination, count distinct sources.
 def calculate_i_dsrc(dst):
     if dst in InHostSrcMap:
@@ -30,12 +33,14 @@ def calculate_i_dsrc(dst):
     else:
         return 0
 
+
 # Outbound degree feature: for a given source, count distinct destinations.
 def calculate_o_ddst(src):
     if src in OutHostDstMap:
         return len(list(OutHostDstMap[src].values()))
     else:
         return 0
+
 
 # Outbound aggregated frequency feature: for a given source, compute the average frequency.
 def calculate_oda_fdst(src):
@@ -47,6 +52,7 @@ def calculate_oda_fdst(src):
     else:
         return 0
 
+
 def save_map(m, fname, dst_path):
     m_rev = [None] * (max(m.values()) + 1)
     for k, v in m.items():
@@ -55,11 +61,13 @@ def save_map(m, fname, dst_path):
         pickle.dump(m_rev, f, protocol=pickle.HIGHEST_PROTOCOL)
         print(os.path.join(dst_path, fname) + " saved")
 
+
 def get_or_add(n, m, id):
     if n not in m:
         m[n] = id[0]
         id[0] += 1
     return m[n]
+
 
 def split(pivoting_file: str, dst_path: str):
     """
@@ -126,18 +134,18 @@ def split(pivoting_file: str, dst_path: str):
             continue
 
         # Extract fields from the CSV (ignoring the index at tokens[0])
-        src     = tokens[1].strip()
-        dst     = tokens[2].strip()
-        p_src   = tokens[3].strip()
-        p_dst   = tokens[4].strip()
-        b_in    = tokens[5].strip()
-        b_out   = tokens[6].strip()
-        d_field = tokens[7].strip()   # additional field "d"
-        ts      = tokens[8].strip()   # timestamp field
-        pkts_in = tokens[9].strip()   # packets in
-        pkts_out= tokens[10].strip()  # packets out
-        proto   = tokens[11].strip()  # protocol
-        label   = tokens[12].strip()  # is_pivoting (label)
+        src = tokens[1].strip()
+        dst = tokens[2].strip()
+        p_src = tokens[3].strip()
+        p_dst = tokens[4].strip()
+        b_in = tokens[5].strip()
+        b_out = tokens[6].strip()
+        d_field = tokens[7].strip()  # additional field "d"
+        ts = tokens[8].strip()  # timestamp field
+        pkts_in = tokens[9].strip()  # packets in
+        pkts_out = tokens[10].strip()  # packets out
+        proto = tokens[11].strip()  # protocol
+        label = tokens[12].strip()  # is_pivoting (label)
 
         line_l, ts_val = fmt_line(ts, src, dst, p_src, p_dst, b_in, b_out, d_field, pkts_in, pkts_out, proto, label)
         f_out.write(line_l)
@@ -153,6 +161,7 @@ def split(pivoting_file: str, dst_path: str):
     save_map(bimap, "bimap.pkl", dst_path)
     save_map(bomap, "bomap.pkl", dst_path)
 
+
 def reverse_load_map(auth_path, fname):
     # Reverse a mapping pickle (list to dict)
     m = {}
@@ -162,8 +171,10 @@ def reverse_load_map(auth_path, fname):
             m[line_l[i]] = i
     return m
 
+
 if __name__ == "__main__":
-    pivoting_file = "/Volumes/KINGSTON/dataset_pivoting.csv"
+    pivoting_file = None
+    assert pivoting_file, "Provide source path where Pivoting file is located"
     dst_path = "../dataset/pivoting"
 
     # Process the entire dataset into one file.
