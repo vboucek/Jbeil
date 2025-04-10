@@ -15,57 +15,27 @@ class Data:
         self.n_unique_nodes = len(self.unique_nodes)
 
 
-def get_data_node_classification(dataset_name, use_validation=False):
-    ### Load data and train val test split
-    graph_df = pd.read_csv('./data/ml_{}.csv'.format(dataset_name))
-    edge_features = np.load('./data/ml_{}.npy'.format(dataset_name))
-    node_features = np.load('./data/ml_{}_node.npy'.format(dataset_name))
-
-    val_time, test_time = list(np.quantile(graph_df.ts, [0.70, 0.85]))
-
-    sources = graph_df.u.values
-    destinations = graph_df.i.values
-    edge_idxs = graph_df.idx.values
-    labels = graph_df.label.values
-    timestamps = graph_df.ts.values
-
-    random.seed(2020)
-
-    train_mask = timestamps <= val_time if use_validation else timestamps <= test_time
-    test_mask = timestamps > test_time
-    val_mask = np.logical_and(timestamps <= test_time, timestamps > val_time) if use_validation else test_mask
-
-    full_data = Data(sources, destinations, timestamps, edge_idxs, labels)
-
-    train_data = Data(sources[train_mask], destinations[train_mask], timestamps[train_mask],
-                      edge_idxs[train_mask], labels[train_mask])
-
-    val_data = Data(sources[val_mask], destinations[val_mask], timestamps[val_mask],
-                    edge_idxs[val_mask], labels[val_mask])
-
-    test_data = Data(sources[test_mask], destinations[test_mask], timestamps[test_mask],
-                     edge_idxs[test_mask], labels[test_mask])
-
-    return full_data, node_features, edge_features, train_data, val_data, test_data
-
-
 def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=False, randomize_features=False,
              logger=None):
     logger.info("inductiveness {}".format(induct))
     ### Load data and train val test split
-    # graph_df = pd.read_csv('./data/{}.csv'.format(dataset_name))
     graph_df = pd.read_csv('./utils/data/ml_{}.csv'.format(dataset_name))
 
     graph_df = graph_df.head(n)
     edge_features = np.load('./utils/data/ml_{}.npy'.format(dataset_name))
     node_features = np.load('./utils/data/ml_{}_node.npy'.format(dataset_name))
 
-    node_features = np.eye(node_features.shape[0])
-
     if randomize_features:
         node_features = np.random.rand(node_features.shape[0], node_features.shape[1])
 
-    val_time, test_time = list(np.quantile(graph_df.ts, [0.70, 0.85]))
+    if dataset_name == "auth":
+        #val_time, test_time = 140400, 151035
+        val_time, test_time = 1000000, 1066394
+    elif dataset_name == "pivoting":
+        val_time, test_time = 1495138503, 1495157955
+    elif dataset_name == "optc":
+        val_time, test_time = 1569255489, 1569269952
+
 
     sources = graph_df.u.values
     destinations = graph_df.i.values
@@ -79,9 +49,8 @@ def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=F
     random.seed(2020)
 
     node_set = set(sources) | set(destinations)
-    # print("----", node_set)
     n_total_unique_nodes = len(node_set)
-    # print("----", n_total_unique_nodes)
+
     # Compute nodes which appear at test time
     test_node_set = set(sources[timestamps > val_time]).union(
         set(destinations[timestamps > val_time]))
@@ -105,7 +74,6 @@ def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=F
     observed_edges_mask = np.logical_and(~new_test_source_mask, ~new_test_destination_mask)
 
     # For train we keep edges happening before the validation time which do not involve any new node
-    # used for inductiveness
     train_mask = np.logical_and(timestamps <= val_time, observed_edges_mask)
 
     train_data = Data(sources[train_mask], destinations[train_mask], timestamps[train_mask],
@@ -131,7 +99,6 @@ def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=F
         new_node_val_mask = np.logical_and(val_mask, edge_contains_new_val_node_mask)
         new_node_test_mask = np.logical_and(test_mask, edge_contains_new_test_node_mask)
 
-
     else:
         edge_contains_new_node_mask = np.array(
             [(a in new_node_set or b in new_node_set) for a, b in zip(sources, destinations)])
@@ -153,6 +120,12 @@ def get_data(dataset_name, induct, n, different_new_nodes_between_val_and_test=F
     new_node_test_data = Data(sources[new_node_test_mask], destinations[new_node_test_mask],
                               timestamps[new_node_test_mask], edge_idxs[new_node_test_mask],
                               labels[new_node_test_mask])
+
+    # Print the number of test edges with label 1 and new test edges with label 1.
+    test_label1_count = np.sum(labels[test_mask] == 1)
+    new_test_label1_count = np.sum(labels[new_node_test_mask] == 1)
+    logger.info("Number of test edges with label 1: {}".format(test_label1_count))
+    logger.info("Number of new test edges with label 1: {}".format(new_test_label1_count))
 
     logger.info("The dataset has {} interactions, involving {} different nodes".format(full_data.n_interactions,
                                                                                        full_data.n_unique_nodes))

@@ -111,10 +111,10 @@ def split(pivoting_file: str, dst_path: str):
             ts,
             get_or_add(src, nmap, nid),
             get_or_add(dst, nmap, nid),
-            get_or_add(p_src, psmap, psid),
-            get_or_add(p_dst, pdmap, pdid),
-            get_or_add(b_in, bimap, bid),
-            get_or_add(b_out, bomap, bid2),
+            p_src,
+            p_dst,
+            b_in,
+            b_out,
             d_field,
             pkts_in,
             pkts_out,
@@ -156,10 +156,6 @@ def split(pivoting_file: str, dst_path: str):
     f_in.close()
 
     save_map(nmap, "nmap.pkl", dst_path)
-    save_map(psmap, "psmap.pkl", dst_path)
-    save_map(pdmap, "pdmap.pkl", dst_path)
-    save_map(bimap, "bimap.pkl", dst_path)
-    save_map(bomap, "bomap.pkl", dst_path)
 
 
 def reverse_load_map(auth_path, fname):

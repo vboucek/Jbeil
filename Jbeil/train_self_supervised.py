@@ -9,7 +9,7 @@ import pickle
 import random
 from pathlib import Path
 
-from evaluation.evaluation import eval_edge_prediction
+from evaluation.evaluation import eval_edge_prediction, eval_edge_detection
 from model.tgn import TGN
 from utils.utils import EarlyStopMonitor, RandEdgeSampler, get_neighbor_finder
 from utils.data_processing import get_data, compute_time_statistics
@@ -18,11 +18,10 @@ torch.manual_seed(0)
 np.random.seed(0)
 random.seed(0)
 
-# Argument and global variables
+### Argument and global variables
 parser = argparse.ArgumentParser('Jbeil self-supervised training')
-parser.add_argument('--exp', type=str, help='Inductive experiment as in TAO (Exp1, Exp2, Exp3)')
-parser.add_argument('--induct', type=float, default=0.3)
-parser.add_argument('--n', type=int, default=5000000000)
+parser.add_argument('--induct', type=float, default=0.4)
+parser.add_argument('--n', type=int, default=1000000000000)
 parser.add_argument('-d', '--data', type=str, help='Dataset name (eg. auth or pivoting)',
                     default='auth')
 parser.add_argument('--bs', type=int, default=200, help='Batch_size')
@@ -55,7 +54,7 @@ parser.add_argument('--memory_update_at_end', action='store_true',
 parser.add_argument('--message_dim', type=int, default=100, help='Dimensions of the messages')
 # parser.add_argument('--memory_dim', type=int, default=172, help='Dimensions of the memory for '
 #                                                                 'each user')
-parser.add_argument('--memory_dim', type=int, default=10, help='Dimensions of the memory for '
+parser.add_argument('--memory_dim', type=int, default=100, help='Dimensions of the memory for '
                                                                'each user')
 parser.add_argument('--different_new_nodes', action='store_true',
                     help='Whether to use disjoint set of new nodes for train and val')
@@ -78,7 +77,6 @@ except:
 
 BATCH_SIZE = args.bs
 NUM_NEIGHBORS = args.n_degree
-NUM_NEG = 1
 NUM_EPOCH = args.n_epoch
 NUM_HEADS = args.n_head
 DROP_OUT = args.drop_out
@@ -143,9 +141,9 @@ nn_test_rand_sampler = RandEdgeSampler(new_node_test_data.sources,
                                        seed=3)
 
 # Set device
-device_string = 'cuda:{}'.format(GPU) if torch.cuda.is_available() else 'cpu'
+device_string = 'cuda:{}'.format(GPU) if torch.mps.is_available() else 'cpu'
 logger.info("$$$ ==> {}".format(device_string))
-device = torch.device(device_string)
+device = torch.device("mps")
 logger.info("### ==> {}".format(device))
 
 # Compute time statistics
@@ -266,16 +264,12 @@ for i in range(args.n_runs):
             # validation on unseen nodes
             train_memory_backup = tgn.memory.backup_memory()
 
-        val_ap, val_auc, val_recall, val_precision, val_fp, val_fn, val_tp, val_tn = eval_edge_prediction(
+        val_ap, val_auc = eval_edge_prediction(
             model=tgn,
             negative_edge_sampler=val_rand_sampler,
             data=val_data,
             n_neighbors=NUM_NEIGHBORS)
 
-        # val_ap, val_auc, FP, FN, TP, TN = eval_edge_prediction(model=tgn,
-        #                                                        negative_edge_sampler=val_rand_sampler,
-        #                                                        data=val_data,
-        #                                                        n_neighbors=NUM_NEIGHBORS)
         if USE_MEMORY:
             val_memory_backup = tgn.memory.backup_memory()
             # Restore memory we had at the end of training to be used when validating on new nodes.
@@ -285,7 +279,7 @@ for i in range(args.n_runs):
 
         # Validate on unseen nodes
 
-        nn_val_ap, nn_val_auc, nn_val_recall, nn_val_precision, nn_val_fp, nn_val_fn, nn_val_tp, nn_val_tn = eval_edge_prediction(
+        nn_val_ap, nn_val_auc = eval_edge_prediction(
             model=tgn,
             negative_edge_sampler=val_rand_sampler,
             data=new_node_val_data,
@@ -317,19 +311,6 @@ for i in range(args.n_runs):
             'val auc: {}, new node val auc: {}'.format(val_auc, nn_val_auc))
         logger.info(
             'val ap: {}, new node val ap: {}'.format(val_ap, nn_val_ap))
-        logger.info(
-            'val recall: {}, new node val recall: {}'.format(val_recall, nn_val_recall))
-        logger.info(
-            'val precision: {}, new node val precision: {}'.format(val_precision, nn_val_precision))
-
-        logger.info(
-            'val fp: {}, new node val fp: {}'.format(val_fp, nn_val_fp))
-        logger.info(
-            'val fn: {}, new node val fn: {}'.format(val_fn, nn_val_fn))
-        logger.info(
-            'val tp: {}, new node val tp: {}'.format(val_tp, nn_val_tp))
-        logger.info(
-            'val tn: {}, new node val tn: {}'.format(val_tn, nn_val_tn))
 
         # Early stopping
         if early_stopper.early_stop_check(val_ap):
@@ -343,52 +324,34 @@ for i in range(args.n_runs):
         else:
             torch.save(tgn.state_dict(), get_checkpoint_path(epoch))
 
+
     # Training has finished, we have loaded the best model, and we want to backup its current
     # memory (which has seen validation edges) so that it can also be used when testing on unseen
     # nodes
     if USE_MEMORY:
         val_memory_backup = tgn.memory.backup_memory()
 
-    # Test on unseen nodes
-    s = time.time()
-
-    ### Test
+    # Test
     logger.info('Started Testing')
+    s = time.time()
     tgn.embedding_module.neighbor_finder = full_ngh_finder
-    test_ap, test_auc, test_recall, test_precision, test_fp, test_fn, test_tp, test_tn = eval_edge_prediction(model=tgn,
-                                                                                                              negative_edge_sampler=test_rand_sampler,
-                                                                                                              data=test_data,
-                                                                                                              n_neighbors=NUM_NEIGHBORS)
+    eval_edge_detection(model=tgn,
+                        negative_edge_sampler=test_rand_sampler,
+                        data=test_data,
+                        n_neighbors=NUM_NEIGHBORS,
+                        )
 
     if USE_MEMORY:
         tgn.memory.restore_memory(val_memory_backup)
 
     # Test on unseen nodes
-    nn_test_ap, nn_test_auc, nn_test_recall, nn_test_precision, nn_test_fp, nn_test_fn, nn_test_tp, nn_test_tn = eval_edge_prediction(
-        model=tgn,
-        negative_edge_sampler=nn_test_rand_sampler,
-        data=new_node_test_data,
-        n_neighbors=NUM_NEIGHBORS)
-
-    logger.info(
-        'Test statistics: Old nodes -- auc: {}, ap: {}, recall: {}, precision: {}, fp: {}, fn: {}, tp: {}, tn: {}'.format(
-            test_auc, test_ap, test_recall, test_precision, test_fp, test_fn, test_tp, test_tn))
-    logger.info(
-        'Test statistics: New nodes -- auc: {}, ap: {}, recall: {}, precision: {}, fp: {}, fn: {}, tp: {}, tn: {}'.format(
-            nn_test_auc, nn_test_ap, nn_test_recall, nn_test_precision, nn_test_fp, nn_test_fn, nn_test_tp, nn_test_tn))
+    eval_edge_detection(model=tgn,
+                        negative_edge_sampler=nn_test_rand_sampler,
+                        data=new_node_test_data,
+                        n_neighbors=NUM_NEIGHBORS,
+                        )
 
     print(f"Test time: {time.time() - s}")
-
-    # Save results for this run
-    pickle.dump({
-        "val_aps": val_aps,
-        "new_nodes_val_aps": new_nodes_val_aps,
-        "test_ap": test_ap,
-        "new_node_test_ap": nn_test_ap,
-        "epoch_times": epoch_times,
-        "train_losses": train_losses,
-        "total_epoch_times": total_epoch_times
-    }, open(results_path, "wb"))
 
     logger.info('Saving Jbeil model')
     if USE_MEMORY:
